@@ -4,7 +4,6 @@ import com.pedidos360.pedidos360_recomendaciones.service.RecomendacionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -12,33 +11,55 @@ import java.util.Map;
 @RequestMapping("/v1/recomendaciones")
 public class RecomendacionController {
 
+    public static class InteraccionRequest {
+        public String usuario;
+        public String producto;
+        public String accion;
+    }
+
+    public static class InteraccionResponse {
+        public String mensaje;
+        public String producto;
+        public String accion;
+        public int peso;
+        public Map recomendados;
+
+        public InteraccionResponse(String mensaje, String producto, String accion, int peso, Map recomendados) {
+            this.mensaje = mensaje;
+            this.producto = producto;
+            this.accion = accion;
+            this.peso = peso;
+            this.recomendados = recomendados;
+        }
+    }
+
     @Autowired
     private RecomendacionService recomendacionService;
 
     @GetMapping
-    public Map<String, Integer> obtenerRecomendados() {
+    public Map obtenerRecomendados() {
         return recomendacionService.obtenerRecomendadosOrdenados();
     }
 
     @GetMapping("/ranking")
-    public List> obtenerRankingDetallado() {
+    public List obtenerRankingDetallado() {
         return recomendacionService.obtenerRankingDetallado();
     }
 
     @PostMapping("/interaccion")
-    public Map<String, Object> registrarInteraccion(@RequestBody Map<String, Object> body) {
-        String usuario = String.valueOf(body.getOrDefault("usuario", "anonimo"));
-        String producto = String.valueOf(body.getOrDefault("producto", "")).trim();
-        String accion = String.valueOf(body.getOrDefault("accion", "VER")).toUpperCase();
+    public InteraccionResponse registrarInteraccion(@RequestBody InteraccionRequest body) {
+        String usuario = (body != null && body.usuario != null) ? body.usuario : "anonimo";
+        String producto = (body != null && body.producto != null) ? body.producto.trim() : "";
+        String accion = (body != null && body.accion != null) ? body.accion.toUpperCase() : "VER";
 
         int peso = recomendacionService.registrarInteraccion(usuario, producto, accion, null);
 
-        Map<String, Object> resp = new LinkedHashMap<>();
-        resp.put("mensaje", "Interacción procesada en Recomendaciones");
-        resp.put("producto", producto);
-        resp.put("accion", accion);
-        resp.put("peso", peso);
-        resp.put("recomendados", recomendacionService.obtenerRecomendadosOrdenados());
-        return resp;
+        return new InteraccionResponse(
+                "Interaccion procesada en Recomendaciones",
+                producto,
+                accion,
+                peso,
+                recomendacionService.obtenerRecomendadosOrdenados()
+        );
     }
 }
