@@ -14,15 +14,43 @@ import java.util.stream.Collectors;
 @Service
 public class RecomendacionService {
 
+    public static class RankingItem {
+        public int posicion;
+        public String producto;
+        public int puntaje;
+
+        public RankingItem(int posicion, String producto, int puntaje) {
+            this.posicion = posicion;
+            this.producto = producto;
+            this.puntaje = puntaje;
+        }
+    }
+
+    public static class EventoInteraccion {
+        public String usuario;
+        public String producto;
+        public String accion;
+        public int peso;
+        public String timestamp;
+
+        public EventoInteraccion(String usuario, String producto, String accion, int peso, String timestamp) {
+            this.usuario = usuario;
+            this.producto = producto;
+            this.accion = accion;
+            this.peso = peso;
+            this.timestamp = timestamp;
+        }
+    }
+
     private final Map<String, Integer> puntajesProductos = new ConcurrentHashMap<>();
-    private final List> historial = new CopyOnWriteArrayList<>();
+    private final List<EventoInteraccion> historial = new CopyOnWriteArrayList<>();
 
     public int calcularPeso(String accion) {
         if (accion == null) return 1;
         return switch (accion.trim().toUpperCase()) {
             case "COMPRAR" -> 3;
             case "GUARDAR" -> 2;
-            default -> 1; // VER
+            default -> 1;
         };
     }
 
@@ -36,13 +64,13 @@ public class RecomendacionService {
 
         puntajesProductos.merge(prodLimpio, peso, Integer::sum);
 
-        Map<String, Object> evento = new LinkedHashMap<>();
-        evento.put("usuario", usuario != null ? usuario : "anonimo");
-        evento.put("producto", prodLimpio);
-        evento.put("accion", accionNorm);
-        evento.put("peso", peso);
-        evento.put("timestamp", Instant.now().toString());
-        historial.add(evento);
+        historial.add(new EventoInteraccion(
+                usuario != null ? usuario : "anonimo",
+                prodLimpio,
+                accionNorm,
+                peso,
+                Instant.now().toString()
+        ));
 
         return peso;
     }
@@ -59,20 +87,16 @@ public class RecomendacionService {
                 ));
     }
 
-    public List> obtenerRankingDetallado() {
-        List> ranking = new ArrayList<>();
+    public List<RankingItem> obtenerRankingDetallado() {
+        List<RankingItem> ranking = new ArrayList<>();
         int pos = 1;
         for (Map.Entry<String, Integer> entry : obtenerRecomendadosOrdenados().entrySet()) {
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("posicion", pos++);
-            item.put("producto", entry.getKey());
-            item.put("puntaje", entry.getValue());
-            ranking.add(item);
+            ranking.add(new RankingItem(pos++, entry.getKey(), entry.getValue()));
         }
         return ranking;
     }
 
-    public List> obtenerHistorial() {
+    public List<EventoInteraccion> obtenerHistorial() {
         return historial;
     }
 }
