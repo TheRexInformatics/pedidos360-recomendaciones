@@ -1,16 +1,10 @@
 package com.pedidos360.pedidos360_recomendaciones.controller;
 
 import com.pedidos360.pedidos360_recomendaciones.service.RecomendacionService;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
 
-import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -18,51 +12,33 @@ import java.util.Map;
 @RequestMapping("/v1/recomendaciones")
 public class RecomendacionController {
 
-    private final RecomendacionService recomendacionService;
+    @Autowired
+    private RecomendacionService recomendacionService;
 
-    public RecomendacionController(RecomendacionService recomendacionService) {
-        this.recomendacionService = recomendacionService;
+    @GetMapping
+    public Map<String, Integer> obtenerRecomendados() {
+        return recomendacionService.obtenerRecomendadosOrdenados();
     }
 
-    @GetMapping("/mis-sugerencias")
-    public ResponseEntity<Object> obtenerMisRecomendaciones(@AuthenticationPrincipal Jwt jwt) {
-        String usuario = jwt != null && jwt.getClaimAsString("preferred_username") != null
-            ? jwt.getClaimAsString("preferred_username")
-            : "usuario@pedidos360.cl";
-
-        return ResponseEntity.ok(
-            recomendacionService.generarRecomendaciones(usuario, Collections.emptyList(), Collections.emptyList())
-        );
+    @GetMapping("/ranking")
+    public List> obtenerRankingDetallado() {
+        return recomendacionService.obtenerRankingDetallado();
     }
 
-    @PostMapping("/sugerir")
-    @SuppressWarnings("unchecked")
-    public ResponseEntity<Object> sugerirPorCompras(
-            @AuthenticationPrincipal Jwt jwt,
-            @RequestBody Map<String, Object> payload
-    ) {
-        String usuario = String.valueOf(payload.getOrDefault("usuario",
-            jwt != null ? jwt.getClaimAsString("preferred_username") : "usuario@pedidos360.cl"));
+    @PostMapping("/interaccion")
+    public Map<String, Object> registrarInteraccion(@RequestBody Map<String, Object> body) {
+        String usuario = String.valueOf(body.getOrDefault("usuario", "anonimo"));
+        String producto = String.valueOf(body.getOrDefault("producto", "")).trim();
+        String accion = String.valueOf(body.getOrDefault("accion", "VER")).toUpperCase();
 
-        List<String> historial = (List<String>) payload.getOrDefault("historialCompras", Collections.emptyList());
-        List<String> carrito = (List<String>) payload.getOrDefault("carritoActual", Collections.emptyList());
+        int peso = recomendacionService.registrarInteraccion(usuario, producto, accion, null);
 
-        return ResponseEntity.ok(
-            recomendacionService.generarRecomendaciones(usuario, historial, carrito)
-        );
-    }
-
-    @PostMapping("/registrar-compra")
-    @SuppressWarnings("unchecked")
-    public ResponseEntity<Object> registrarCompra(@RequestBody Map<String, Object> payload) {
-        String usuario = String.valueOf(payload.getOrDefault("usuario", "usuario@pedidos360.cl"));
-        List<String> productos = (List<String>) payload.getOrDefault("productos", Collections.emptyList());
-
-        recomendacionService.registrarCompra(usuario, productos);
-        return ResponseEntity.ok(Map.of(
-            "mensaje", "Compra registrada en motor de recomendaciones",
-            "usuario", usuario,
-            "productosRegistrados", productos.size()
-        ));
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("mensaje", "Interacción procesada en Recomendaciones");
+        resp.put("producto", producto);
+        resp.put("accion", accion);
+        resp.put("peso", peso);
+        resp.put("recomendados", recomendacionService.obtenerRecomendadosOrdenados());
+        return resp;
     }
 }
