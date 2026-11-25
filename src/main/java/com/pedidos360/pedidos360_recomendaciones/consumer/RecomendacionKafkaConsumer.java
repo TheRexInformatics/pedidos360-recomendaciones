@@ -1,50 +1,34 @@
 package com.pedidos360.pedidos360_recomendaciones.consumer;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pedidos360.pedidos360_recomendaciones.service.RecomendacionService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Component
 public class RecomendacionKafkaConsumer {
 
-    private static final Logger log = LoggerFactory.getLogger(RecomendacionKafkaConsumer.class);
-    private static final Pattern PATRON_USUARIO = Pattern.compile("\"(?:cliente|usuario)\"\\s*:\\s*\"([^\"]+)\"");
-    private static final Pattern PATRON_NOMBRE = Pattern.compile("\"nombre\"\\s*:\\s*\"([^\"]+)\"");
+    @Autowired
+    private RecomendacionService recomendacionService;
 
-    private final RecomendacionService recomendacionService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public RecomendacionKafkaConsumer(RecomendacionService recomendacionService) {
-        this.recomendacionService = recomendacionService;
-    }
-
-    @KafkaListener(topics = {"pedidos-topic", "pagos-topic"}, groupId = "recomendaciones-group")
-    public void consumirEventoCompra(String mensaje) {
+    @KafkaListener(topics = "interacciones-productos", groupId = "recomendaciones-group")
+    public void consumirInteraccion(String mensaje) {
         try {
-            String usuario = "anonimo@pedidos360.cl";
-            Matcher matcherUsuario = PATRON_USUARIO.matcher(mensaje);
-            if (matcherUsuario.find()) {
-                usuario = matcherUsuario.group(1);
-            }
+            JsonNode root = objectMapper.readTree(mensaje);
+            String usuario = root.path("usuario").asText("anonimo");
+            String producto = root.path("producto").asText("");
+            String accion = root.path("accion").asText("VER");
+            Integer peso = root.has("peso") ? root.path("peso").asInt() : null;
 
-            List<String> productos = new ArrayList<>();
-            Matcher matcherNombre = PATRON_NOMBRE.matcher(mensaje);
-            while (matcherNombre.find()) {
-                productos.add(matcherNombre.group(1));
-            }
-
-            if (!productos.isEmpty()) {
-                recomendacionService.registrarCompra(usuario, productos);
-                log.info("Historial actualizado para {} con {} productos", usuario, productos.size());
-            }
+            int pesoAplicado = recomendacionService.registrarInteraccion(usuario, producto, accion, peso);
+            System.out.println(">>> [KAFKA RECOMENDACIONES] Producto: " + producto
+                    + " | Acción: " + accion + " | +" + pesoAplicado + " pts");
         } catch (Exception e) {
-            log.warn("No se pudo procesar mensaje Kafka en recomendaciones: {}", e.getMessage());
+            System.err.println(">>> [KAFKA RECOMENDACIONES] Mensaje no JSON recibido: " + mensaje);
         }
     }
 }
